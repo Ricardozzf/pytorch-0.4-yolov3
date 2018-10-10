@@ -14,8 +14,8 @@ from eval_all import get_image_xml_name
 from utils import load_class_names
 
 
-def sketch_ap(rec, prec, use_07_metric=False):
-    """ ap = sketch_ap(rec, prec, [use_07_metric])
+def compute_ap(rec, prec, use_07_metric=False):
+    """ ap = compute_ap(rec, prec, [use_07_metric])
     Compute VOC AP given precision and recall.
     If use_07_metric is true, uses the
     VOC 07 11 point method (default:False).
@@ -47,9 +47,9 @@ def sketch_ap(rec, prec, use_07_metric=False):
         ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
     return ap
 
-def sketch_eval(detpath, imagesetfile, classname, cachedir,
+def my_eval(detpath, imagesetfile, classname, cachedir,
              ovthresh=0.5, use_07_metric=False):
-    """rec, prec, ap = sketch_eval(detpath,
+    """rec, prec, ap = my_eval(detpath,
                                 imagesetfile,
                                 classname,
                                 [ovthresh],
@@ -182,9 +182,11 @@ def sketch_eval(detpath, imagesetfile, classname, cachedir,
     # avoid divide by zero in case the first detection matches a difficult
     # ground truth
     prec = tp / np.maximum(tp + fp, np.finfo(np.float64).eps)
-    ap = sketch_ap(rec, prec, use_07_metric)
+    ap = compute_ap(rec, prec, use_07_metric)
 
-    return rec, prec, ap
+    #print('class: {:<10s} \t num occurrence: {:4d}'.format(classname, npos))
+
+    return rec, prec, ap, npos
     
 
 
@@ -201,27 +203,30 @@ def _do_python_eval(res_prefix, imagesetfile, classesfile, output_dir = 'output'
         os.mkdir(output_dir)
         
     _classes = load_class_names(classesfile)
+    total = 0
     for i, cls in enumerate(_classes):
         if cls == '__background__':
             continue
       
-        rec, prec, ap = sketch_eval(
+        rec, prec, ap, noccur = my_eval(
             filename, imagesetfile, cls, cachedir, ovthresh=0.5,
             use_07_metric=use_07_metric)
         aps += [ap]
-        print('AP for {} = {:.4f}'.format(cls, ap))
+        total += noccur
+        print('AP for {:<10s} = {:.4f} with {:4d} views'.format(cls, ap, noccur))
         with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
             cPickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
 
-    print('Mean AP = {:.4f}'.format(np.mean(aps)))
-    print('~~~~~~~~~~~~~')
-    print('   Results:')
-    print('-------------')
+    print('Mean AP = {:.4f} with total {:4d} views'.format(np.mean(aps), total))
+    
+    print('~'*30)
+    print(' '*10, 'Results:')
+    print('-'*30)
     for i, ap in enumerate(aps):
         print('{:<10s}\t{:.3f}'.format(_classes[i], ap))
-    print('=============')
+    print('='*30)
     print('{:^10s}\t{:.3f}'.format('Average', np.mean(aps)))
-    print('~~~~~~~~~~~~~')
+    print('~'*30)
     print('')
     print('--------------------------------------------------------------')
     print('Results computed with the **unofficial** Python eval code.')
